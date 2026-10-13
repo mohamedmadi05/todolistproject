@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>To-Do List</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --card: #1a1a1f;
+      --border: #2a2a32;
+      --text: #e8e8e8;
+      --text-muted: #888;
+      --accent: #22d3ee;
+      --accent-hover: #06b6d4;
+      --danger: #f87171;
+      --success: #4ade80;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+      --radius: 16px;
+      --transition: 150ms ease;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --border: #e2e8f0;
+        --text: #0f172a;
+        --text-muted: #64748b;
+        --accent: #06b6d4;
+        --accent-hover: #0891b2;
+        --shadow: 0 8px 32px rgba(0,0,0,0.08);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    
+    .app { width: 100%; max-width: 480px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    
+    .header { padding: 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .title { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+    .stats { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    
+    .input-wrap { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+    .input-row { display: flex; gap: 12px; }
+    .input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 1rem; color: var(--text); outline: none; transition: border-color var(--transition), box-shadow var(--transition); }
+    .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15); }
+    .input::placeholder { color: var(--text-muted); }
+    .add-btn { background: var(--accent); color: #0f0f12; border: none; border-radius: 12px; padding: 0 24px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background var(--transition), transform var(--transition); }
+    .add-btn:hover { background: var(--accent-hover); }
+    .add-btn:active { transform: scale(0.98); }
+    .add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .list { list-style: none; padding: 0; margin: 0; max-height: 50vh; overflow-y: auto; }
+    .item { display: flex; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border); gap: 14px; transition: background var(--transition); animation: slideIn 0.2s ease; }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: rgba(128, 128, 128, 0.03); }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .checkbox { width: 22px; height: 22px; border: 2px solid var(--border); border-radius: 6px; background: var(--bg); appearance: none; cursor: pointer; display: grid; place-content: center; transition: all var(--transition); flex-shrink: 0; }
+    .checkbox:checked { background: var(--accent); border-color: var(--accent); }
+    .checkbox:checked::after { content: ''; width: 6px; height: 11px; border: solid #0f0f12; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) translateY(-1px); }
+    .checkbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    
+    .text { flex: 1; font-size: 1rem; line-height: 1.5; word-break: break-word; transition: color var(--transition), text-decoration var(--transition); }
+    .text.done { color: var(--text-muted); text-decoration: line-through; }
+    
+    .delete-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); opacity: 0; }
+    .item:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+    .delete-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; opacity: 1; }
+    
+    .empty { padding: 48px 24px; text-align: center; color: var(--text-muted); font-size: 0.95rem; }
+    .empty svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.4; }
+    
+    .footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+    .clear-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; transition: all var(--transition); }
+    .clear-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(248, 113, 113, 0.08); }
+    .clear-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
+
+    /* ============================ AI chatbot ============================ */
+    .chat-fab {
+      position: fixed; right: 24px; bottom: 24px; z-index: 50;
+      width: 56px; height: 56px; border: none; border-radius: 50%;
+      display: grid; place-items: center; line-height: 1;
+      font-size: 24px; color: #0f0f12; cursor: pointer;
+      background: var(--accent); box-shadow: var(--shadow);
+      transition: background var(--transition), transform var(--transition);
+    }
+    .chat-fab:hover { background: var(--accent-hover); transform: translateY(-2px) scale(1.04); }
+    .chat-fab:active { transform: scale(0.97); }
+    .chat-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .chat {
+      position: fixed; right: 24px; bottom: 92px; z-index: 50;
+      width: min(380px, calc(100vw - 32px));
+      height: min(560px, calc(100vh - 120px));
+      display: flex; flex-direction: column; overflow: hidden;
+      background: var(--card); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      animation: chatIn 0.18s ease;
+    }
+    @keyframes chatIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+    .chat__head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+    }
+    .chat__id { display: flex; align-items: center; gap: 10px; }
+    .chat__avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: grid; place-items: center; font-weight: 700; font-size: 13px;
+      color: #0f0f12; background: var(--accent);
+    }
+    .chat__name { font-weight: 600; font-size: 15px; }
+    .chat__model { font-size: 11px; color: var(--text-muted); }
+    .chat__close {
+      background: transparent; border: none; color: var(--text-muted);
+      font-size: 24px; line-height: 1; cursor: pointer;
+      width: 32px; height: 32px; border-radius: 8px;
+    }
+    .chat__close:hover { color: var(--text); background: rgba(128, 128, 128, 0.12); }
+
+    .chat__body {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .chat__empty { color: var(--text); font-size: 14px; line-height: 1.5; }
+    .chat__suggests { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chat__suggest {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+      padding: 6px 12px; font-size: 12.5px; color: var(--text); cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .chat__suggest:hover { border-color: var(--accent); }
+
+    .msg { display: flex; }
+    .msg--user { justify-content: flex-end; }
+    .msg--assistant { justify-content: flex-start; }
+    .msg__bubble {
+      max-width: 82%; padding: 9px 13px; border-radius: 14px;
+      font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    }
+    .msg--user .msg__bubble { background: var(--accent); color: #0f0f12; border-bottom-right-radius: 4px; }
+    .msg--assistant .msg__bubble { background: var(--bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+
+    .msg__typing { display: inline-flex; gap: 4px; align-items: center; height: 14px; }
+    .msg__typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: chatBlink 1.2s infinite ease-in-out; }
+    .msg__typing i:nth-child(2) { animation-delay: 0.15s; }
+    .msg__typing i:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes chatBlink { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+
+    .chat__error {
+      font-size: 12.5px; color: var(--danger); background: rgba(248, 113, 113, 0.12);
+      border: 1px solid rgba(248, 113, 113, 0.35); border-radius: 10px;
+      padding: 8px 10px; word-break: break-word;
+    }
+
+    .chat__foot { display: flex; gap: 8px; align-items: flex-end; padding: 10px; border-top: 1px solid var(--border); }
+    .chat__input {
+      flex: 1; resize: none; max-height: 96px; padding: 10px 12px;
+      font: inherit; font-size: 14px;
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px; outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .chat__input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15); }
+    .chat__send {
+      flex: none; padding: 10px 16px; font: inherit; font-size: 14px; font-weight: 600;
+      color: #0f0f12; background: var(--accent); border: none; border-radius: 10px;
+      cursor: pointer; transition: background var(--transition);
+    }
+    .chat__send:hover:not(:disabled) { background: var(--accent-hover); }
+    .chat__send:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* ======================= Attachments (tasks) ======================= */
+    .input-tools { display: flex; gap: 10px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+    .attach-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);
+      padding: 8px 12px; border-radius: 10px; font-size: 0.85rem; cursor: pointer;
+      transition: all var(--transition);
+    }
+    .attach-btn:hover { border-color: var(--accent); color: var(--text); }
+    .attach-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .composer-hint { font-size: 0.72rem; color: var(--text-muted); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 6px 8px; max-width: 100%;
+    }
+    .chip__thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; }
+    .chip__icon { width: 36px; height: 36px; border-radius: 6px; display: grid; place-items: center; background: var(--card); border: 1px solid var(--border); font-size: 18px; }
+    .chip__meta { display: flex; flex-direction: column; min-width: 0; }
+    .chip__name { font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+    .chip__sub { font-size: 0.68rem; color: var(--text-muted); }
+    .chip__x { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+    .chip__x:hover { color: var(--danger); background: rgba(248, 113, 113, 0.12); }
+
+    .composer-atts, .msg__atts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .msg__atts { margin-bottom: 6px; }
+    .msg--user .msg__atts { justify-content: flex-end; }
+
+    .task-att { flex-shrink: 0; }
+    .task-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; display: block; transition: transform var(--transition); }
+    .task-thumb:hover { transform: scale(1.06); }
+    .task-file { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.72rem; color: var(--text-muted); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; cursor: zoom-in; max-width: 130px; }
+    .task-file > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ai-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 8px; font-size: 15px; opacity: 0; transition: all var(--transition); flex-shrink: 0; }
+    .item:hover .ai-btn { opacity: 1; }
+    .ai-btn:hover { color: var(--accent); background: rgba(34, 211, 238, 0.12); }
+    .item.dragover { background: rgba(34, 211, 238, 0.10); box-shadow: inset 0 0 0 1px var(--accent); }
+    .card.dragover { box-shadow: inset 0 0 0 2px var(--accent), var(--shadow); }
+
+    /* ======================= Lightbox / file preview ======================= */
+    .lightbox {
+      position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.72);
+      display: grid; place-items: center; padding: 24px; animation: fadeIn 0.15s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .lightbox__box {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      max-width: min(900px, 92vw); max-height: 88vh; overflow: hidden;
+      display: flex; flex-direction: column; box-shadow: var(--shadow);
+    }
+    .lightbox__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .lightbox__name { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lightbox__body { overflow: auto; padding: 16px; display: grid; place-items: center; }
+    .lightbox__body img { max-width: 100%; max-height: 72vh; border-radius: 10px; }
+    .lightbox__body pre { margin: 0; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; max-height: 72vh; color: var(--text); }
+
+    /* ======================= Chat attachments ======================= */
+    .chat__foot2 { display: flex; flex-direction: column; }
+    .chat__attach {
+      flex: none; width: 42px; height: 40px; border-radius: 10px; cursor: pointer;
+      background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);
+      font-size: 17px; display: grid; place-items: center; transition: all var(--transition);
+    }
+    .chat__attach:hover { border-color: var(--accent); color: var(--text); }
+    .chat__attach:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .chat.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; }
+    .msg__stack { display: flex; flex-direction: column; gap: 6px; max-width: 82%; min-width: 0; }
+    .msg--user .msg__stack { align-items: flex-end; }
+    .msg--assistant .msg__stack { align-items: flex-start; }
+    .msg__stack .msg__bubble { max-width: 100%; }
+    .msg__thumb { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); cursor: zoom-in; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, memo } = React;
+
+    const STORAGE_KEY = 'modern-todos-v1';
+
+    // Load initial state from localStorage
+    const loadTodos = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+      } catch { return []; }
+    };
+
+    /* ===================== Attachments: shared helpers ===================== */
+    const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB per file
+    const MAX_CHAT_ATTACHMENTS = 4;
+
+    const isTextLike = (file) =>
+      (file.type && file.type.startsWith('text/')) ||
+      /\.(txt|md|markdown|csv|json|js|jsx|ts|tsx|html|css|log|yml|yaml|xml)$/i.test(file.name || '');
+
+    const fmtSize = (n) => {
+      if (n == null) return '';
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    };
+
+    const readAsDataURL = (file) => new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error('Could not read "' + (file.name || 'file') + '".'));
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+    });
+
+    // Shrink photos so they stay small enough for localStorage + the API.
+    const downscaleImage = (file, maxDim = 1280, quality = 0.82) => new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error('Could not read "' + (file.name || 'image') + '".'));
+      r.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('"' + (file.name || 'image') + '" is not a valid image.'));
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          const keepPng = file.type === 'image/png';
+          const dataUrl = canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', quality);
+          resolve({
+            kind: 'image',
+            name: file.name || 'image.png',
+            type: keepPng ? 'image/png' : 'image/jpeg',
+            size: Math.round(dataUrl.length * 0.75),
+            dataUrl, width: w, height: h,
+          });
+        };
+        img.src = r.result;
+      };
+      r.readAsDataURL(file);
+    });
+
+    // Normalise a picked / dropped / pasted file into an attachment object.
+    const fileToAttachment = async (file) => {
+      if (!file) return null;
+      if (file.size > MAX_FILE_BYTES) {
+        throw new Error('"' + (file.name || 'file') + '" is too large — max 5 MB.');
+      }
+      if (file.type === 'image/svg+xml') {
+        const dataUrl = await readAsDataURL(file);
+        return { kind: 'image', name: file.name || 'image.svg', type: 'image/svg+xml', size: file.size, dataUrl };
+      }
+      if (file.type && file.type.startsWith('image/')) {
+        return await downscaleImage(file);
+      }
+      if (isTextLike(file)) {
+        const text = await file.text();
+        return { kind: 'text', name: file.name || 'note.txt', type: file.type || 'text/plain', size: file.size, text: text.slice(0, 20000) };
+      }
+      return { kind: 'file', name: file.name || 'file', type: file.type || 'application/octet-stream', size: file.size };
+    };
+
+    // Pull files out of a drop or paste event (handles both shapes).
+    const collectFiles = (dt) => {
+      if (!dt) return [];
+      const out = [];
+      if (dt.files && dt.files.length) {
+        for (const f of dt.files) out.push(f);
+      } else if (dt.items) {
+        for (const it of dt.items) {
+          if (it.kind === 'file') { const f = it.getAsFile(); if (f) out.push(f); }
+        }
+      }
+      return out;
+    };
+
+    // Small preview chip reused by the task composer and the chat composer.
+    function AttachmentChip({ a, onPreview, onRemove }) {
+      return (
+        <span className="chip">
+          {a.kind === 'image' ? (
+            <img className="chip__thumb" src={a.dataUrl} alt={a.name} title="Click to enlarge"
+                 onClick={() => onPreview && onPreview(a)} />
+          ) : (
+            <span className="chip__icon" title={a.name}>{a.kind === 'text' ? '📄' : '📎'}</span>
+          )}
+          <span className="chip__meta">
+            <span className="chip__name" title={a.name}>{a.name}</span>
+            <span className="chip__sub">{fmtSize(a.size)}{a.kind === 'text' ? ' · text' : a.kind === 'file' ? ' · file' : ''}</span>
+          </span>
+          {onRemove && <button className="chip__x" onClick={onRemove} aria-label={'Remove ' + a.name}>×</button>}
+        </span>
+      );
+    }
+
+    // Build the OpenAI-style content parts the model receives for a message.
+    const buildUserContent = (text, atts) => {
+      const images = [];
+      const extras = [];
+      (atts || []).forEach(a => {
+        if (a.kind === 'image') {
+          images.push({ type: 'image_url', image_url: { url: a.dataUrl } });
+        } else if (a.kind === 'text') {
+          extras.push('\n\n--- Attached file: ' + a.name + ' ---\n' + a.text);
+        } else {
+          extras.push('\n\n[Attached file "' + a.name + '" (' + (a.type || 'unknown') + ', ' + fmtSize(a.size) + ') — binary contents are not readable here]');
+        }
+      });
+      let full = (text || '');
+      if (extras.length) full += extras.join('');
+      if (!full.trim() && images.length) full = 'Please take a look at the attached image(s).';
+      const content = [{ type: 'text', text: full }];
+      images.forEach(i => content.push(i));
+      return content;
+    };
+
+    // Memoized TodoItem to prevent re-renders
+    const TodoItem = memo(function TodoItem({ todo, onToggle, onDelete, onPreview, onAskAI, onAttach }) {
+      const [dragOver, setDragOver] = useState(false);
+      const a = todo.attachment;
+
+      const handleDrop = (e) => {
+        if (!onAttach) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver(false);
+        const files = collectFiles(e.dataTransfer);
+        if (files.length) onAttach(todo.id, files[0]);
+      };
+
+      return (
+        <li
+          className={'item' + (dragOver ? ' dragover' : '')}
+          role="listitem"
+          onDragOver={e => { if (onAttach && collectFiles(e.dataTransfer).length) { e.preventDefault(); e.stopPropagation(); setDragOver(true); } }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <input
+            type="checkbox"
+            className="checkbox"
+            checked={todo.done}
+            onChange={() => onToggle(todo.id)}
+            aria-label={todo.done ? 'Mark incomplete' : 'Mark complete'}
+          />
+          <span className={`text ${todo.done ? 'done' : ''}`}>{todo.text}</span>
+
+          {a && (
+            <span className="task-att">
+              {a.kind === 'image' ? (
+                <img className="task-thumb" src={a.dataUrl} alt={a.name} title={a.name + ' — click to enlarge'}
+                     onClick={() => onPreview && onPreview(a)} />
+              ) : (
+                <button className="task-file" onClick={() => onPreview && onPreview(a)} title={a.name}>
+                  <span>{a.kind === 'text' ? '📄' : '📎'}</span><span>{a.name}</span>
+                </button>
+              )}
+            </span>
+          )}
+
+          {a && onAskAI && (
+            <button className="ai-btn" onClick={() => onAskAI(a)}
+                    title="Ask the AI about this attachment" aria-label="Ask the AI about this attachment">
+              ✨
+            </button>
+          )}
+
+          <button
+            className="delete-btn"
+            onClick={() => onDelete(todo.id)}
+            aria-label="Delete task"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </li>
+      );
+    });
+
+    function TodoApp({ onPreview, onAskAI }) {
+      const [todos, setTodos] = useState(loadTodos);
+      const [input, setInput] = useState('');
+      const [focusInput, setFocusInput] = useState(true);
+      const [pending, setPending] = useState(null);   // attachment for the next task
+      const [fileError, setFileError] = useState('');
+      const [dragCard, setDragCard] = useState(false);
+      const fileRef = React.useRef(null);
+
+      // Persist to localStorage
+      useEffect(() => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(todos)); }
+        catch { /* storage full: keep the app usable for this session */ }
+      }, [todos]);
+
+      // Auto-focus input on mount
+      useEffect(() => { setFocusInput(true); }, []);
+
+      const addTodo = useCallback(() => {
+        const text = input.trim();
+        if (!text && !pending) return;
+        const fallback = pending ? (pending.kind === 'image' ? '📷 Photo' : '📎 ' + pending.name) : '';
+        setTodos(prev => [{
+          id: Date.now(),
+          text: text || fallback,
+          done: false,
+          attachment: pending || null,
+        }, ...prev]);
+        setInput('');
+        setPending(null);
+        setFileError('');
+      }, [input, pending]);
+
+      const toggleTodo = useCallback((id) => {
+        setTodos(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+      }, []);
+
+      const deleteTodo = useCallback((id) => {
+        setTodos(prev => prev.filter(t => t.id !== id));
+      }, []);
+
+      const clearCompleted = useCallback(() => {
+        setTodos(prev => prev.filter(t => !t.done));
+      }, []);
+
+      // ---- Attachments on tasks ----
+      const pickFiles = useCallback(async (files) => {
+        const list = Array.from(files || []);
+        if (!list.length) return;
+        setFileError('');
+        try {
+          const a = await fileToAttachment(list[0]);
+          if (a) setPending(a);
+        } catch (err) {
+          setFileError(err && err.message ? err.message : String(err));
+        }
+      }, []);
+
+      const attachToTask = useCallback(async (id, file) => {
+        setFileError('');
+        try {
+          const a = await fileToAttachment(file);
+          if (!a) return;
+          setTodos(prev => prev.map(t => t.id === id ? { ...t, attachment: a } : t));
+        } catch (err) {
+          setFileError(err && err.message ? err.message : String(err));
+        }
+      }, []);
+
+      const handlePaste = useCallback((e) => {
+        const files = collectFiles(e.clipboardData);
+        if (files.length) { e.preventDefault(); pickFiles(files); }
+      }, [pickFiles]);
+
+      const handleKeyDown = useCallback((e) => {
+        if (e.key === 'Enter') addTodo();
+        if (e.key === 'Escape') setInput('');
+      }, [addTodo]);
+
+      const completedCount = useMemo(() => todos.filter(t => t.done).length, [todos]);
+
+      return (
+        <div className="app">
+          <div
+            className={'card' + (dragCard ? ' dragover' : '')}
+            role="main"
+            onDragOver={e => { e.preventDefault(); if (collectFiles(e.dataTransfer).length) setDragCard(true); }}
+            onDragLeave={() => setDragCard(false)}
+            onDrop={e => { e.preventDefault(); setDragCard(false); const f = collectFiles(e.dataTransfer); if (f.length) pickFiles(f); }}
+          >
+            <header className="header">
+              <h1 className="title">Tasks</h1>
+              <span className="stats">{completedCount} / {todos.length}</span>
+            </header>
+
+            <div className="input-wrap">
+              <div className="input-row">
+                <input
+                  className="input"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder="What needs to be done?"
+                  autoFocus={focusInput}
+                  aria-label="New task"
+                />
+                <button className="add-btn" onClick={addTodo} disabled={!input.trim() && !pending}>
+                  Add
+                </button>
+              </div>
+
+              {pending && (
+                <div className="composer-atts" style={{ marginTop: '12px' }}>
+                  <AttachmentChip a={pending} onPreview={onPreview} onRemove={() => setPending(null)} />
+                </div>
+              )}
+
+              <div className="input-tools">
+                <button className="attach-btn" onClick={() => fileRef.current && fileRef.current.click()}>
+                  📎 Attach picture / file
+                </button>
+                <span className="composer-hint">or paste a screenshot / drop a file</span>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*,text/*,.md,.markdown,.csv,.json,.log,.yml,.yaml"
+                  style={{ display: 'none' }}
+                  onChange={e => { pickFiles(e.target.files); e.target.value = ''; }}
+                />
+              </div>
+              {fileError && <div className="composer-hint" style={{ color: 'var(--danger)', marginTop: '6px' }}>{fileError}</div>}
+            </div>
+
+            <ul className="list" role="list" aria-label="Tasks">
+              {todos.length === 0 ? (
+                <li className="empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M9 11l3 3L22 4"></path>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                  </svg>
+                  <div>No tasks yet</div>
+                  <div style={{fontSize:'0.8rem',marginTop:'4px'}}>Add one above to get started</div>
+                </li>
+              ) : (
+                todos.map(todo => (
+                  <TodoItem
+                    key={todo.id}
+                    todo={todo}
+                    onToggle={toggleTodo}
+                    onDelete={deleteTodo}
+                    onPreview={onPreview}
+                    onAskAI={onAskAI}
+                    onAttach={attachToTask}
+                  />
+                ))
+              )}
+            </ul>
+
+            {todos.length > 0 && completedCount > 0 && (
+              <footer className="footer">
+                <button className="clear-btn" onClick={clearCompleted}>
+                  Clear {completedCount} completed
+                </button>
+              </footer>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================== Chatbot ============================== */
+    // Radox AI — DEMO ONLY: anyone who opens this page can see this key.
+    const CHAT_API_URL = 'https://radoxai.com/v1/chat/completions';
+    const CHAT_API_KEY = 'cc_nETJKsEykT3XTWjsId6y4jx0c24fUnRw44j74axHECqKvlNv';
+    const CHAT_MODEL = 'gemini-3.6-flash';
+
+    // Read the tasks straight from the storage TodoApp already uses, so the
+    // assistant can see the current list without changing any to-do code.
+    const readTodos = () => {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+      catch { return []; }
+    };
+
+    const chatSystemPrompt = () => {
+      const todos = readTodos();
+      const list = todos.length
+        ? todos.map(t => `- [${t.done ? 'x' : ' '}] ${t.text}${t.attachment ? ` (attachment: ${t.attachment.name})` : ''}`).join('\n')
+        : '(the to-do list is currently empty)';
+      return 'You are a friendly, concise assistant inside a small React to-do list app. '
+        + 'Answer in short, clear sentences. '
+        + "You can see the user's current to-do list below, so you can answer questions about it. "
+        + 'The user may also attach photos or files — when they do, look at them and help with what you see.\n\n'
+        + 'Current to-do list:\n' + list;
+    };
+
+    const CHAT_SUGGESTIONS = [
+      'Summarize my tasks',
+      'What should I do first?',
+      'Plan my day',
+    ];
+
+    function Chatbot({ seed, onPreview }) {
+      const [open, setOpen] = useState(false);
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState('');
+      const [atts, setAtts] = useState([]);
+      const [attError, setAttError] = useState('');
+      const [dragChat, setDragChat] = useState(false);
+      const [busy, setBusy] = useState(false);
+      const [error, setError] = useState('');
+      const bodyRef = React.useRef(null);
+      const inputRef = React.useRef(null);
+      const fileRef = React.useRef(null);
+
+      useEffect(() => {
+        if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+      }, [messages, busy, open]);
+
+      useEffect(() => {
+        if (open && inputRef.current) inputRef.current.focus();
+      }, [open]);
+
+      // Opened from a task's "Ask AI" (✨) button: attach that file + prefill a question.
+      useEffect(() => {
+        if (!seed) return;
+        setOpen(true);
+        if (seed.atts && seed.atts.length) setAtts(seed.atts);
+        if (seed.prompt) setInput(seed.prompt);
+      }, [seed]);
+
+      const addFiles = useCallback(async (files) => {
+        const list = Array.from(files || []);
+        if (!list.length) return;
+        setAttError('');
+        const room = MAX_CHAT_ATTACHMENTS - atts.length;
+        if (room <= 0) { setAttError('Up to ' + MAX_CHAT_ATTACHMENTS + ' attachments per message.'); return; }
+        const done = [];
+        for (const f of list.slice(0, room)) {
+          try { const a = await fileToAttachment(f); if (a) done.push(a); }
+          catch (err) { setAttError(err && err.message ? err.message : String(err)); }
+        }
+        if (done.length) setAtts(prev => [...prev, ...done].slice(0, MAX_CHAT_ATTACHMENTS));
+      }, [atts.length]);
+
+      const send = async (textArg) => {
+        const text = (textArg != null ? textArg : input).trim();
+        if ((!text && atts.length === 0) || busy) return;
+
+        const userAtts = atts;
+        const next = [...messages, { role: 'user', content: text, attachments: userAtts }];
+        setMessages(next);
+        setInput('');
+        setAtts([]);
+        setAttError('');
+        setError('');
+        setBusy(true);
+
+        try {
+          const res = await fetch(CHAT_API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + CHAT_API_KEY,
+            },
+            body: JSON.stringify({
+              model: CHAT_MODEL,
+              max_tokens: 2048,
+              stream: true,
+              messages: [
+                { role: 'system', content: chatSystemPrompt() },
+                ...next.map(m => ({
+                  role: m.role,
+                  content: (m.attachments && m.attachments.length)
+                    ? buildUserContent(m.content, m.attachments)
+                    : m.content,
+                })),
+              ],
+            }),
+          });
+
+          if (!res.ok || !res.body) {
+            const detail = await res.text().catch(() => '');
+            throw new Error(`Request failed (${res.status}) ${detail.slice(0, 300)}`);
+          }
+
+          // Start an empty assistant bubble, then fill it as tokens stream in.
+          setMessages(m => [...m, { role: 'assistant', content: '' }]);
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let acc = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith('data:')) continue;
+              const payload = trimmed.slice(5).trim();
+              if (payload === '[DONE]') continue;
+              try {
+                const json = JSON.parse(payload);
+                const delta = json.choices?.[0]?.delta?.content;
+                if (delta) {
+                  acc += delta;
+                  setMessages(m => {
+                    const copy = m.slice();
+                    copy[copy.length - 1] = { role: 'assistant', content: acc };
+                    return copy;
+                  });
+                }
+              } catch { /* ignore partial/malformed chunks */ }
+            }
+          }
+
+          if (!acc) {
+            setMessages(m => {
+              const copy = m.slice();
+              copy[copy.length - 1] = { role: 'assistant', content: '(no response)' };
+              return copy;
+            });
+          }
+        } catch (err) {
+          setError(String(err && err.message ? err.message : err));
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          send();
+        }
+      };
+
+      if (!open) {
+        return (
+          <button
+            className="chat-fab"
+            onClick={() => setOpen(true)}
+            aria-label="Open AI assistant"
+            title="Ask the AI about your tasks"
+          >
+            💬
+          </button>
+        );
+      }
+
+      return (
+        <div
+          className={'chat' + (dragChat ? ' dragover' : '')}
+          role="dialog"
+          aria-label="AI assistant"
+          onDragOver={e => { e.preventDefault(); if (collectFiles(e.dataTransfer).length) setDragChat(true); }}
+          onDragLeave={() => setDragChat(false)}
+          onDrop={e => { e.preventDefault(); setDragChat(false); const f = collectFiles(e.dataTransfer); if (f.length) addFiles(f); }}
+        >
+          <div className="chat__head">
+            <div className="chat__id">
+              <div className="chat__avatar">AI</div>
+              <div>
+                <div className="chat__name">Task Assistant</div>
+                <div className="chat__model">{CHAT_MODEL}</div>
+              </div>
+            </div>
+            <button className="chat__close" onClick={() => setOpen(false)} aria-label="Close assistant">×</button>
+          </div>
+
+          <div className="chat__body" ref={bodyRef}>
+            {messages.length === 0 && (
+              <>
+                <p className="chat__empty">
+                  Hi! I can see your to-do list. Ask me anything — or attach a photo / file with 📎
+                  and I'll take a look.
+                </p>
+                <div className="chat__suggests">
+                  {CHAT_SUGGESTIONS.map(s => (
+                    <button key={s} className="chat__suggest" onClick={() => send(s)}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {messages.map((m, i) => {
+              const showTyping = m.role === 'assistant' && i === messages.length - 1 && busy && !m.content;
+              return (
+                <div key={i} className={`msg msg--${m.role}`}>
+                  <div className="msg__stack">
+                    {m.attachments && m.attachments.length > 0 && (
+                      <div className="msg__atts">
+                        {m.attachments.map((a, j) => a.kind === 'image' ? (
+                          <img key={j} className="msg__thumb" src={a.dataUrl} alt={a.name}
+                               title={a.name + ' — click to enlarge'} onClick={() => onPreview && onPreview(a)} />
+                        ) : (
+                          <button key={j} className="task-file" onClick={() => onPreview && onPreview(a)} title={a.name}>
+                            <span>{a.kind === 'text' ? '📄' : '📎'}</span><span>{a.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {(m.content || showTyping) && (
+                      <div className="msg__bubble">
+                        {showTyping
+                          ? <span className="msg__typing"><i></i><i></i><i></i></span>
+                          : m.content}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {error && <div className="chat__error">{error}</div>}
+          </div>
+
+          <div className="chat__foot2">
+            {atts.length > 0 && (
+              <div className="composer-atts" style={{ padding: '10px 10px 0' }}>
+                {atts.map((a, i) => (
+                  <AttachmentChip key={i} a={a} onPreview={onPreview}
+                                   onRemove={() => setAtts(p => p.filter((_, j) => j !== i))} />
+                ))}
+              </div>
+            )}
+            {attError && <div className="composer-hint" style={{ color: 'var(--danger)', padding: '8px 12px 0' }}>{attError}</div>}
+            <div className="chat__foot">
+              <button className="chat__attach" onClick={() => fileRef.current && fileRef.current.click()}
+                      title="Attach a picture or file" aria-label="Attach a picture or file">📎</button>
+              <textarea
+                ref={inputRef}
+                className="chat__input"
+                rows={1}
+                placeholder="Ask about your tasks, or attach a photo…"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                onPaste={e => { const f = collectFiles(e.clipboardData); if (f.length) { e.preventDefault(); addFiles(f); } }}
+              />
+              <button className="chat__send" onClick={() => send()} disabled={busy || (!input.trim() && atts.length === 0)}>
+                {busy ? '…' : 'Send'}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,text/*,.md,.markdown,.csv,.json,.log,.yml,.yaml"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => { addFiles(e.target.files); e.target.value = ''; }}
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ======================= Lightbox + app shell ======================= */
+    function FilePreview({ a, onClose }) {
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, [onClose]);
+
+      return (
+        <div className="lightbox" onClick={onClose} role="dialog" aria-label={'Preview of ' + a.name}>
+          <div className="lightbox__box" onClick={e => e.stopPropagation()}>
+            <div className="lightbox__head">
+              <span className="lightbox__name" title={a.name}>{a.name}</span>
+              <button className="chip__x" onClick={onClose} aria-label="Close preview">×</button>
+            </div>
+            <div className="lightbox__body">
+              {a.kind === 'image' && <img src={a.dataUrl} alt={a.name} />}
+              {a.kind === 'text' && <pre>{a.text}</pre>}
+              {a.kind === 'file' && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', lineHeight: 1.6 }}>
+                  <strong style={{ color: 'var(--text)' }}>{a.name}</strong><br />
+                  {fmtSize(a.size)} · {a.type}<br /><br />
+                  This file type can’t be previewed in the browser, but the assistant
+                  still knows it’s attached.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [preview, setPreview] = useState(null);
+      const [seed, setSeed] = useState(null);
+
+     
+      const askAI = (attachment) => setSeed({
+        atts: attachment ? [attachment] : [],
+        prompt: attachment ? 'What can you tell me about this attachment?' : '',
+        nonce: Date.now(),
+      });
+
+      return (
+        <React.Fragment>
+          <TodoApp onPreview={setPreview} onAskAI={askAI} />
+          <Chatbot seed={seed} onPreview={setPreview} />
+          {preview && <FilePreview a={preview} onClose={() => setPreview(null)} />}
+        </React.Fragment>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
