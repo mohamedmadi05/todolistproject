@@ -260,12 +260,61 @@
 
     const STORAGE_KEY = 'modern-todos-v1';
 
-    // Load initial state from localStorage
-    const loadTodos = () => {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        return stored ? JSON.parse(stored) : [];
-      } catch { return []; }
+    // ---- Storage: IndexedDB (large, copes with photos) + localStorage fallback ----
+    const DB_NAME = 'todo-app-db';
+    const DB_STORE = 'kv';
+
+    const openDB = () => new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    const idbGet = async (key) => {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const req = db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    };
+
+    const idbSet = async (key, value) => {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    };
+
+    const storeGet = async (key) => {
+      if ('indexedDB' in window) {
+        try { return await idbGet(key); } catch { /* fall through */ }
+      }
+      try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : undefined; } catch { return undefined; }
+    };
+
+    const storeSet = async (key, value) => {
+      if ('indexedDB' in window) {
+        try { await idbSet(key, value); return; } catch { /* fall through */ }
+      }
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full */ }
+    };
+
+    // Load tasks, migrating any old localStorage data into IndexedDB once.
+    const loadTodos = async () => {
+      let v;
+      try { v = await storeGet(STORAGE_KEY); } catch { /* ignore */ }
+      if (v === undefined) {
+        try { const s = localStorage.getItem(STORAGE_KEY); if (s) v = JSON.parse(s); } catch { /* ignore */ }
+      }
+      return Array.isArray(v) ? v : [];
     };
 
     /* ===================== Attachments: shared helpers ===================== */
@@ -459,7 +508,8 @@
     });
 
     function TodoApp({ onPreview, onAskAI }) {
-      const [todos, setTodos] = useState(loadTodos);
+      const [todos, setTodos] = useState([]);
+      const [loaded, setLoaded] = useState(false);
       const [input, setInput] = useState('');
       const [focusInput, setFocusInput] = useState(true);
       const [pending, setPending] = useState(null);   // attachment for the next task
@@ -467,11 +517,20 @@
       const [dragCard, setDragCard] = useState(false);
       const fileRef = React.useRef(null);
 
-      // Persist to localStorage
+      // Load once (IndexedDB, migrating any old localStorage data)
       useEffect(() => {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(todos)); }
-        catch { /* storage full: keep the app usable for this session */ }
-      }, [todos]);
+        let alive = true;
+        loadTodos()
+          .then(list => { if (alive) { setTodos(list); setLoaded(true); } })
+          .catch(() => { if (alive) setLoaded(true); });
+        return () => { alive = false; };
+      }, []);
+
+      // Persist whenever tasks change (only after the first load completes)
+      useEffect(() => {
+        if (!loaded) return;
+        storeSet(STORAGE_KEY, todos).catch(() => {});
+      }, [todos, loaded]);
 
       // Auto-focus input on mount
       useEffect(() => { setFocusInput(true); }, []);
@@ -593,7 +652,7 @@
             </div>
 
             <ul className="list" role="list" aria-label="Tasks">
-              {todos.length === 0 ? (
+              {!loaded ? null : todos.length === 0 ? (
                 <li className="empty">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M9 11l3 3L22 4"></path>
@@ -635,15 +694,19 @@
     const CHAT_API_KEY = 'cc_nETJKsEykT3XTWjsId6y4jx0c24fUnRw44j74axHECqKvlNv';
     const CHAT_MODEL = 'gemini-3.6-flash';
 
-    // Read the tasks straight from the storage TodoApp already uses, so the
-    // assistant can see the current list without changing any to-do code.
-    const readTodos = () => {
-      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-      catch { return []; }
+    // Read the tasks straight from the same storage TodoApp uses, so the
+    // assistant can see the current list.
+    const readTodosAsync = async () => {
+      let v;
+      try { v = await storeGet(STORAGE_KEY); } catch { /* ignore */ }
+      if (v === undefined) {
+        try { const s = localStorage.getItem(STORAGE_KEY); if (s) v = JSON.parse(s); } catch { /* ignore */ }
+      }
+      return Array.isArray(v) ? v : [];
     };
 
-    const chatSystemPrompt = () => {
-      const todos = readTodos();
+    const chatSystemPrompt = async () => {
+      const todos = await readTodosAsync();
       const list = todos.length
         ? todos.map(t => `- [${t.done ? 'x' : ' '}] ${t.text}${t.attachment ? ` (attachment: ${t.attachment.name})` : ''}`).join('\n')
         : '(the to-do list is currently empty)';
@@ -717,6 +780,7 @@
         setBusy(true);
 
         try {
+          const systemPrompt = await chatSystemPrompt();
           const res = await fetch(CHAT_API_URL, {
             method: 'POST',
             headers: {
@@ -728,7 +792,7 @@
               max_tokens: 2048,
               stream: true,
               messages: [
-                { role: 'system', content: chatSystemPrompt() },
+                { role: 'system', content: systemPrompt },
                 ...next.map(m => ({
                   role: m.role,
                   content: (m.attachments && m.attachments.length)
